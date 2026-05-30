@@ -91,7 +91,7 @@ def combine(df):
     heatmap1(df, axes[4])
     heatmap2(df, axes[5])
     plt.tight_layout()
-    plt.savefig('C:/Users/Danyl/MedicalDataAnalysis/Assignments/Day 10 Assignment/Combined_Dashboard.png', dpi=300)
+    plt.savefig('figure.png' dpi=300)
     plt.show()
 
 # Execution
