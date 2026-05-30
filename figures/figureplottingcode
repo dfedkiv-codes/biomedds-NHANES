@@ -1,0 +1,99 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from scipy.stats import norm
+
+def data():
+    df = pd.read_csv(r'##INPUT MERGED DATA FILE DIRECTORY##') #<-- READ THIS
+    return df
+
+def histogram(df, ax):
+    ax.grid(True, linestyle='--', alpha=0.6)
+    sns.histplot(df["SBP Merged"], kde=True, linewidth=1, ax=ax)
+    ax.axvline(x=120, color="green", linewidth=2, linestyle='--')
+    ax.axvline(x=130, color="orange", linewidth=2, linestyle='--')
+    ax.axvline(x=140, color="red", linewidth=2, linestyle='--')
+    ax.axvline(x=df["SBP Merged"].mean(), color="black", linewidth=2)
+    ax.axvline(x=df["SBP Merged"].median(), color="gray", linewidth=2)
+    ax.set_xlabel("Systolic Blood Pressures (mmHg)")
+    ax.set_ylabel("Count")
+    ax.set_title("Systolic Blood Pressures across NHANES Dataset")
+    ax.legend([('Data Curve'),
+                (f'Elevated (>=120 mmHg): {len(df.loc[df["SBP Merged"] >= 120])}'), 
+                (f'Type 1 Hypertension (>=130 mmHg): {len(df.loc[df["SBP Merged"] >= 130])}'), 
+                (f'Type 2 Hypertension (>=140 mmHg): {len(df.loc[df["SBP Merged"] >= 140])}'), 
+                (f'Mean SBP: {round(df["SBP Merged"].mean(),2)}'), 
+                (f'Median SBP: {df["SBP Merged"].median()}')], loc='best')
+
+def violin(df, ax):
+    ax.grid(True, linestyle='--', alpha=0.6)
+    cholesterols = df.groupby("Race-Ethnicity")["Total Cholesterol (mg/dl)"].median()
+    my_order = cholesterols.sort_values().index.copy()
+    group_counts = df["Race-Ethnicity"].value_counts()
+    sns.violinplot(data=df, x='Race-Ethnicity', y='Total Cholesterol (mg/dl)', order=my_order, ax=ax)
+    sns.stripplot(data=df, x='Race-Ethnicity', y='Total Cholesterol (mg/dl)', jitter=True, color="lightgray", order=my_order, ax=ax)
+    new_labels = []
+    for group in my_order:
+        count = group_counts.get(group, 0)
+        cholesterol = cholesterols.get(group, 0).round(2)
+        new_labels.append(f"{group}\n(n={count})\n(avg={cholesterol})")
+    ax.set_xticklabels(new_labels, rotation=15, ha='right') # Rotated slightly to fit grid
+    ax.set_xlabel("") 
+    ax.set_title("Cholesterol (mg/dl) across Ethnicities from NHANES Dataset")
+
+def scatter(df, ax):
+    df_clean = df[df["Age"].between(0, 79)] 
+    ax.grid(True, linestyle='--', alpha=0.6)
+    sns.scatterplot(data=df_clean, x='Age', y='SBP Merged', hue="Gender", alpha=0.2, ax=ax)
+    for gender, group in df_clean.groupby('Gender'): 
+        clean_group = group[['Age', 'SBP Merged']].dropna()
+        m, b = np.polyfit(clean_group['Age'], clean_group['SBP Merged'], 1)
+        sns.regplot(data=clean_group, x='Age', y='SBP Merged', scatter=False, label=f'{gender} Line: SBP = {m:.2f}*(Age) + {b:.1f}', ax=ax)
+    ax.set_title("SBP vs. Age By Gender from NHANES")
+    ax.legend()
+
+def boxplot(df, ax):
+    sbp = pd.DataFrame()
+    sbp["SBP"] = df["SBP Merged"].copy().dropna()
+    sbpval = sbp["SBP"].values
+    conditions1 = [(sbpval < 120), 
+                  (sbpval >= 120) & (sbpval < 129), 
+                  (sbpval >= 130) & (sbpval < 139), 
+                  (sbpval >= 140)]
+    choices1 = ["Regular", "Elevated", "Stage 1 Hypertension", "Stage 2 Hypertension"]
+    sbp["Hypertension Classification"] = np.select(conditions1, choices1, default="Regular")
+    sns.boxplot(data=sbp, x='Hypertension Classification', y='SBP', order=choices1, hue='Hypertension Classification', ax=ax)
+    ax.axhline(y=120, color="red", linewidth=2, label="120 mmHg Reference")
+    ax.legend()
+    ax.set_title("Box Plot of Hypertension Distributions from NHANES")
+
+def heatmap1(df, ax):
+    mask = np.triu(np.ones_like(df[["Age", "SBP Merged", "DBP Merged", "Total Cholesterol (mg/dl)"]].corr(), dtype=bool))
+    sns.heatmap(df[["Age", "SBP Merged", "DBP Merged", "Total Cholesterol (mg/dl)"]].corr(numeric_only=True), annot=False, cmap='coolwarm', mask=mask, ax=ax)
+    ax.set_title("Heatmap of Various NHANES Variables")
+
+def heatmap2(df, ax):
+    hyp = df.groupby(["Gender", "Age"])["Hypertensive"].mean().reset_index()
+    hyp_pivot = hyp.pivot(index="Age", columns="Gender", values="Hypertensive")
+    sns.heatmap(hyp_pivot, annot=False, cmap="YlOrRd", fmt=".2f", cbar_kws={'label': 'Hypertension Rate'}, ax=ax)
+    ax.set_title("Hypertension Rate by Age and Gender")
+    ax.set_ylabel("Age")
+    ax.set_xlabel("Gender")
+
+def combine(df):
+    fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(18, 22))
+    axes = axes.flatten()
+    histogram(df, axes[0])
+    violin(df, axes[1])
+    scatter(df, axes[2])
+    boxplot(df, axes[3])
+    heatmap1(df, axes[4])
+    heatmap2(df, axes[5])
+    plt.tight_layout()
+    plt.savefig('C:/Users/Danyl/MedicalDataAnalysis/Assignments/Day 10 Assignment/Combined_Dashboard.png', dpi=300)
+    plt.show()
+
+# Execution
+df = data()
+combine(df)
