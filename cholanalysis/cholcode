@@ -1,0 +1,139 @@
+import pandas as pd
+import scipy.stats as stats
+from scipy.stats import kurtosis
+import statsmodels.api as sm
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import math
+
+def iqr(x): return x.quantile(0.75) - x.quantile(0.25)
+def kurt(x): return kurtosis(x)
+def ci(x): return abs((stats.norm.interval(0.95, loc=x.mean(), scale=(x.std(ddof=1) / np.sqrt(len(x))))[0]-x.mean()))
+
+def data_import():
+    df = pd.read_csv("FinalData.csv")
+    return df
+
+def grouping(df, x):
+    table = df.groupby(x)["Total Cholesterol (mg/dl)"].agg(['count', 'mean', 'median', 'std', 'var', iqr, 'min', 'max', 'skew', kurt, ci]).round(2).copy().reset_index()
+    return table
+
+def plot_group_tables(ax, gender_table, age_table, race_table):
+    ax.grid(True, linestyle='--', alpha=0.5)
+    def prep(df, label_col):
+        df = df.copy()
+        df = df.sort_values("mean", ascending=True)
+        return df
+    g = prep(gender_table, "Gender")
+    a = prep(age_table, "Age Group")
+    r = prep(race_table, "Race-Ethnicity")
+    ax.bar(
+        g["Gender"] + " (G)",
+        g["mean"],
+        yerr=g["ci"],
+        capsize=4,
+        alpha=0.7,
+        label="Gender"
+    )
+    ax.bar(
+        a["Age Group"] + " (A)",
+        a["mean"],
+        yerr=a["ci"],
+        capsize=4,
+        alpha=0.7,
+        label="Age"
+    )
+    ax.bar(
+        r["Race-Ethnicity"] + " (R)",
+        r["mean"],
+        yerr=r["ci"],
+        capsize=4,
+        alpha=0.7,
+        label="Race"
+    )
+    ax.set_title("Mean Cholesterol by Group (Summary Tables)", fontsize=14, weight='bold')
+    ax.set_ylabel("Total Cholesterol (mg/dl)")
+    ax.tick_params(axis='x', rotation=90)
+    plt.tight_layout()
+    ax.legend()
+
+def sex_hist(df, sex, ax):
+    ax.grid(True, linestyle='--', alpha=0.6)
+    sex2 = sex.sort_values(by='count', ascending=False)
+    sns.histplot(data=df, 
+                 x='Total Cholesterol (mg/dl)', 
+                 hue='Gender', 
+                 kde=True, 
+                 linewidth=1, 
+                 ax=ax, 
+                 multiple="stack",
+                )
+    ax.set_title("Distribution of Cholesterol Among Genders", size=14, weight='bold', pad=10)
+    ax.axvline(x=240, color='red', linestyle='--', label="Hyperlipidimia (chol >= 240)")
+    ax.axvline(x=120, color='blue', linestyle='--', label="Hypolidimia (chol <= 120)")
+    ax.legend([(f'Male: {sex2.iloc[1,1]}'),
+               (f'Female: {sex2.iloc[0,1]}'),
+               ("Hyperlipidimia (chol >= 240)"),
+               ("Hyperlipidimia (chol <= 120)")
+              ])
+
+def violin(df, x, ax):
+    ax.grid(True, linestyle='--', alpha=0.6)
+    cholesterols = df.groupby(x)["Total Cholesterol (mg/dl)"].median()
+    my_order = cholesterols.sort_values().index.copy()
+    group_counts = df[x].value_counts()
+    sns.violinplot(
+        data=df,
+        x=x,
+        y='Total Cholesterol (mg/dl)',
+        hue='Gender',
+        order=my_order,
+        inner=None,
+        dodge=True,
+        ax=ax,
+        alpha=0.8,
+        split=True
+    )
+    sns.boxplot(
+        data=df,
+        x=x,
+        y='Total Cholesterol (mg/dl)',
+        hue='Gender',
+        order=my_order,
+        dodge=True,
+        width=0.4,
+        showfliers=False,
+        ax=ax,
+    )
+    new_labels = []
+    for group in my_order:
+        count = group_counts.get(group, 0)
+        cholesterol = cholesterols.get(group, 0).round(2)
+        new_labels.append(f"{group}\n(n={count})")
+    for i in range(len(my_order)):
+        ax.axvline(x=(i+0.5), color='black', linestyle='--', linewidth=1)
+    ax.set_title(f"Distribution of Cholesterol Among {x}", size=14, weight='bold', pad=10)
+    ax.set_xticklabels(new_labels)
+    ax.set_xlabel("") 
+    ax.legend([('Female'),('Male')])
+
+def figures(df, gender, age, race): 
+    fig, axes = plt.subplots(nrows=2, ncols=2, figsize=(15, 15), layout="constrained") 
+    axes = axes.flatten() 
+    plot_group_tables(axes[2], gender, age, race)
+    sex_hist(df, gender, axes[3]) 
+    violin(df, 'Race-Ethnicity', axes[0])
+    violin(df, 'Age Group', axes[1])
+    plt.tight_layout(pad=2.0) 
+    plt.savefig('CholesterolAnalysis.png', dpi=300, bbox_inches='tight')
+    plt.show()
+
+df = data_import()
+gender = grouping(df, "Gender")
+age = grouping(df, "Age Group")
+race = grouping(df, "Race-Ethnicity")
+figures(df, gender, age, race)
+gender.to_csv('genderstats.csv')
+age.to_csv('agestats.csv')
+race.to_csv('racestats.csv')
